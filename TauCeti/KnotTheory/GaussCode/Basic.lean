@@ -79,34 +79,24 @@ variable {n : ℕ}
 
 attribute [simp] BasedOrientedGaussCode.visit_eq_iff BasedOrientedGaussCode.over_partner
 
+/-- Partnered visits carry the same crossing label. -/
+@[simp]
+theorem visit_partner (D : BasedOrientedGaussCode n) (i : Fin (2 * n)) :
+    D.visit (D.partner.val i) = D.visit i := by
+  exact (D.visit_eq_iff i (D.partner.val i)).mpr (Or.inr rfl) |>.symm
+
 /-- Two Gauss codes are equal when their visit labels, over/under data, and signs agree.
 The partner matching is forced by the visit labels. -/
 @[ext]
 theorem ext {D E : BasedOrientedGaussCode n}
     (hvisit : D.visit = E.visit) (hover : D.over = E.over) (hsign : D.sign = E.sign) : D = E := by
   have hpartner : D.partner = E.partner := by
-    apply Subtype.ext
-    apply Equiv.ext
-    intro i
-    have hsame : D.visit i = D.visit (E.partner.val i) := by
-      rw [hvisit]
-      exact (E.visit_eq_iff i (E.partner.val i)).mpr (Or.inr rfl)
-    rcases (D.visit_eq_iff i (E.partner.val i)).mp hsame with h | h
-    · exact (E.partner.apply_ne i h).elim
-    · exact h.symm
+    ext i : 1
+    have := (visit_partner D i).symm
+    rw [hvisit, E.visit_eq_iff i (D.partner.val i)] at this
+    exact this.resolve_left (D.partner.apply_ne i)
   cases D
-  cases E
-  cases hvisit
-  cases hover
-  cases hsign
-  cases hpartner
-  rfl
-
-/-- Partnered visits carry the same crossing label. -/
-@[simp]
-theorem visit_partner (D : BasedOrientedGaussCode n) (i : Fin (2 * n)) :
-    D.visit (D.partner.val i) = D.visit i := by
-  exact (D.visit_eq_iff i (D.partner.val i)).mpr (Or.inr rfl) |>.symm
+  congr
 
 /-- Every crossing label occurs in the traversal. -/
 theorem visit_surjective (D : BasedOrientedGaussCode n) : Function.Surjective D.visit := by
@@ -182,12 +172,9 @@ theorem visitData_bijective (D : BasedOrientedGaussCode n) : Function.Bijective 
   apply (Fintype.bijective_iff_injective_and_card _).2
   constructor
   · intro i j hij
-    have hvis : D.visit i = D.visit j := congrArg Prod.fst hij
-    have hover : D.over i = D.over j := congrArg Prod.snd hij
-    rcases (D.visit_eq_iff i j).mp hvis with rfl | hj
+    rcases (D.visit_eq_iff i j).mp congr($(hij).fst) with rfl | rfl
     · rfl
-    · subst j
-      exact (D.over_partner_ne i hover.symm).elim
+    · exact absurd congr($(hij).snd).symm (D.over_partner_ne i)
   · simp [Nat.mul_comm]
 
 /-- Visits are equivalent to pairs consisting of a crossing and an over/under choice. -/
@@ -325,7 +312,7 @@ def writhe (D : BasedOrientedGaussCode n) : ℤ :=
 
 /-- Expand the writhe as the sum of the integer values of the crossing signs. -/
 theorem writhe_def (D : BasedOrientedGaussCode n) :
-    D.writhe = ∑ c : Fin n, ((D.sign c : ℤˣ) : ℤ) := by simp [writhe]
+    D.writhe = ∑ c : Fin n, ((D.sign c : ℤˣ) : ℤ) := (rfl)
 
 /-- Summing the sign of the crossing met at each visit counts every crossing twice, so it gives
 twice the writhe. -/
@@ -343,7 +330,7 @@ theorem sum_sign_visit (D : BasedOrientedGaussCode n) :
 def mirror (D : BasedOrientedGaussCode n) : BasedOrientedGaussCode n where
   visit := D.visit
   over := D.over
-  sign := fun c => -D.sign c
+  sign c := -D.sign c
   partner := D.partner
   visit_eq_iff := D.visit_eq_iff
   over_partner := D.over_partner
@@ -419,7 +406,7 @@ def reverse (D : BasedOrientedGaussCode n) : BasedOrientedGaussCode n where
 
 /-- Reversing orientation twice recovers the original Gauss code. -/
 @[simp] theorem reverse_reverse (D : BasedOrientedGaussCode n) : D.reverse.reverse = D := by
-  apply ext <;> funext i <;> simp
+  ext <;> simp
 
 /-- Reversing orientation preserves the writhe. -/
 @[simp] theorem writhe_reverse (D : BasedOrientedGaussCode n) : D.reverse.writhe = D.writhe := by
@@ -428,7 +415,7 @@ def reverse (D : BasedOrientedGaussCode n) : BasedOrientedGaussCode n where
 /-- Mirroring and reversing orientation commute. -/
 @[simp] theorem mirror_reverse (D : BasedOrientedGaussCode n) :
     D.reverse.mirror = D.mirror.reverse := by
-  apply ext <;> funext i <;> simp
+  ext <;> simp
 
 /-- The setoid of oriented Gauss codes modulo orientation reversal. -/
 private def unorientedSetoid : Setoid (BasedOrientedGaussCode n) :=
@@ -497,29 +484,33 @@ def relabel (D : BasedOrientedGaussCode n) (e : Fin n ≃ Fin n) : BasedOriented
 /-- Relabelling preserves the writhe. -/
 @[simp] theorem writhe_relabel (D : BasedOrientedGaussCode n) (e : Fin n ≃ Fin n) :
     (D.relabel e).writhe = D.writhe := by
-  rw [writhe_def, writhe_def]
-  simpa only [sign_relabel] using
-    e.symm.sum_comp (fun c : Fin n => ((D.sign c : ℤˣ) : ℤ))
+  simp_rw [writhe_def, sign_relabel]
+  exact e.symm.sum_comp (fun c : Fin n => ((D.sign c : ℤˣ) : ℤ))
+
+/-- Successive relabellings compose. -/
+@[simp] theorem relabel_relabel' (D : BasedOrientedGaussCode n) (e f : Fin n ≃ Fin n) :
+    (D.relabel e).relabel f = D.relabel (e.trans f) := by
+  ext <;> simp
 
 /-- Successive relabellings compose. -/
 @[simp] theorem relabel_relabel (D : BasedOrientedGaussCode n) (e f : Fin n ≃ Fin n) :
     (D.relabel e).relabel f = D.relabel (e.trans f) := by
-  apply ext <;> funext i <;> simp
+  ext <;> simp
 
 /-- Mirroring commutes with relabelling crossings. -/
 @[simp] theorem mirror_relabel (D : BasedOrientedGaussCode n) (e : Fin n ≃ Fin n) :
     (D.relabel e).mirror = D.mirror.relabel e := by
-  apply ext <;> funext i <;> simp
+  ext <;> simp
 
 /-- Reversing orientation commutes with relabelling crossings. -/
 @[simp] theorem reverse_relabel (D : BasedOrientedGaussCode n) (e : Fin n ≃ Fin n) :
     (D.relabel e).reverse = D.reverse.relabel e := by
-  apply ext <;> funext i <;> simp
+  ext <;> simp
 
 /-- Relabelling by the identity equivalence has no effect. -/
 @[simp] theorem relabel_refl (D : BasedOrientedGaussCode n) :
     D.relabel (Equiv.refl (Fin n)) = D := by
-  apply ext <;> funext i <;> simp
+  ext <;> simp
 
 /-- Two Gauss codes differ only by a relabelling of their crossings when the same pairs of visits
 belong to a common crossing, and the codes have the same over/under data and the same signs of the
@@ -542,7 +533,8 @@ theorem exists_relabel_eq_of_visit_eq_visit_iff {D E : BasedOrientedGaussCode n}
   refine ⟨e, ext (funext fun i ↦ hf i) hover (funext fun c ↦ ?_)⟩
   obtain ⟨i, rfl⟩ := E.visit_surjective c
   rw [sign_relabel, ← hsign, ← hf i]
-  exact congrArg D.sign (e.symm_apply_apply (D.visit i))
+  congr
+  exact e.symm_apply_apply (D.visit i)
 
 /-- The form of `TauCeti.BasedOrientedGaussCode.exists_relabel_eq_of_visit_eq_visit_iff` for codes
 whose numbers of crossings are equal but not definitionally so: after identifying their visits by
@@ -570,18 +562,17 @@ theorem ext_of_visit_lt_visit_iff {D E : BasedOrientedGaussCode n}
   have heq (i j : Fin (2 * n)) : D.visit i = D.visit j ↔ E.visit i = E.visit j := by
     simp only [le_antisymm_iff, ← not_lt, hvisit]
   obtain ⟨e, he⟩ := exists_relabel_eq_of_visit_eq_visit_iff heq hover hsign
-  have hv (i : Fin (2 * n)) : e (D.visit i) = E.visit i :=
-    congrArg (fun C ↦ C.visit i) he
   -- The label permutation preserves order, so it is the identity on `Fin n`.
   have hmono : StrictMono e := by
     intro c c' h
     obtain ⟨i, rfl⟩ := D.visit_surjective c
     obtain ⟨j, rfl⟩ := D.visit_surjective c'
-    rw [hv, hv]
+    simp_rw [← visit_relabel, he]
     exact (hvisit i j).1 h
-  have hid : (e : Fin n → Fin n) = id :=
-    hmono.range_inj_of_wellFoundedLT strictMono_id |>.1 (by simp)
-  have heid : e = Equiv.refl (Fin n) := Equiv.ext (congrFun hid)
+  have hid : e.toFun = id := hmono.range_inj_of_wellFoundedLT strictMono_id |>.1 (by simp)
+  have heid : e = Equiv.refl (Fin n) := by
+    ext x : 1
+    exact congr($hid x)
   simpa only [heid, relabel_refl] using he
 
 /-- The form of `TauCeti.BasedOrientedGaussCode.ext_of_visit_lt_visit_iff` for codes whose
@@ -611,24 +602,16 @@ def empty : BasedOrientedGaussCode 0 where
 
 /-- Every crossing-free based oriented Gauss code is the canonical empty code. -/
 theorem eq_empty (D : BasedOrientedGaussCode 0) : D = empty := by
-  apply ext <;> funext i <;> exact Fin.elim0 i
+  ext i <;> exact Fin.elim0 i
 
 /-- The one-crossing positive kink. This is the smallest nontrivial Gauss code. -/
 def positiveKink : BasedOrientedGaussCode 1 where
-  visit := fun _ => 0
-  over := fun i => if i = 0 then true else false
-  sign := fun _ => 1
-  partner := PerfectMatching.mk (Equiv.swap 0 1) (by
-    intro i
-    fin_cases i <;> simp) (by
-    intro i
-    fin_cases i <;> simp)
-  visit_eq_iff := by
-    intro i j
-    fin_cases i <;> fin_cases j <;> simp
-  over_partner := by
-    intro i
-    fin_cases i <;> simp
+  visit _ := 0
+  over i := i = 0
+  sign _ := 1
+  partner := PerfectMatching.mk (Equiv.swap 0 1) (by decide) (by decide)
+  visit_eq_iff := by rw [PerfectMatching.val_mk]; decide
+  over_partner := by rw [PerfectMatching.val_mk]; decide
 
 /-- Both visits of the positive kink carry its unique crossing label. -/
 @[simp] theorem visit_positiveKink (i : Fin 2) :
@@ -721,15 +704,15 @@ def relabel (D : BasedUnorientedGaussCode n) (e : Fin n ≃ Fin n) :
     BasedUnorientedGaussCode n :=
   Quotient.map' (fun E : BasedOrientedGaussCode n => E.relabel e) (by
     intro E F h
-    apply (BasedOrientedGaussCode.unorientedSetoid_apply _ _).mpr
-    rcases (BasedOrientedGaussCode.unorientedSetoid_apply E F).mp h with rfl | h
+    rw [BasedOrientedGaussCode.unorientedSetoid_apply] at h ⊢
+    rcases h with rfl | h
     · exact Or.inl rfl
     · exact Or.inr (h ▸ (BasedOrientedGaussCode.reverse_relabel F e).symm)) D
 
 /-- Relabelling an unoriented class is represented by relabelling any oriented representative. -/
 @[simp] theorem relabel_forgetOrientation (D : BasedOrientedGaussCode n) (e : Fin n ≃ Fin n) :
     relabel D.forgetOrientation e = (D.relabel e).forgetOrientation := by
-  simp only [relabel, BasedOrientedGaussCode.forgetOrientation, Quotient.map'_mk'']
+  simp_rw [relabel, BasedOrientedGaussCode.forgetOrientation, Quotient.map'_mk'']
   apply Quotient.sound
   exact (BasedOrientedGaussCode.unorientedSetoid_apply _ _).mpr (Or.inl rfl)
 
